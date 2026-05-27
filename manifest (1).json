@@ -1,0 +1,14 @@
+{
+  "background_color": "#000000",
+  "dir": "auto",
+  "display": "fullscreen",
+  "name": "GRONK WORK",
+  "orientation": "portrait",
+  "scope": "/",
+  "short_name": "GWORK",
+  "start_url": "https://electriclightsdev.github.io/WORKAPP/",
+  "theme_color": "#ab27ec",
+  "id": "GRONKWORK",
+  "description": "WORK APP",
+  "lang": "en"
+}

@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#42C2B3">
+  <title>Worker Simulation - Life & Work</title>
+  
+  <style>
+    /* ============================================================
+       MOBILE-FIRST RESPONSIVE STYLES
+       Designed for phone screens, scales up gracefully to tablet/desktop
+       ============================================================ */
+
+    /* --- CSS Reset & Base --- */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* Allow text selection inside actual inputs */
+    input, textarea, select {
+      -webkit-user-select: text;
+      user-select: text;
+      touch-action: auto;
+    }
+
+    /* Use dynamic viewport units to handle mobile browser chrome */
+    html, body {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh; /* Dynamic viewport: adjusts when URL bar shows/hides */
+      overflow: hidden;
+      background-color: #2c3e50;
+      overscroll-behavior: none; /* Prevent pull-to-refresh */
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    /* --- App Container --- */
+    /* Mobile: fill the entire screen. Desktop: fill screen but cap at a sensible reading width. */
+    #app-container {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      background-color: #42C2B3;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Desktop: still fill the screen but center content with a soft cap */
+    @media (min-width: 768px) {
+      #app-container {
+        max-width: 100%;
+        box-shadow: none;
+      }
+    }
+
+    .hidden { display: none !important; }
+
+    /* --- Safe areas for notched devices --- */
+    .safe-top { padding-top: env(safe-area-inset-top); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+    /* --- Onboarding Screen --- */
+    #onboarding-screen {
+      background-color: white;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5vh 20px calc(5vh + env(safe-area-inset-bottom));
+      text-align: center;
+      z-index: 100;
+    }
+    #onboarding-screen h1 { font-size: clamp(1.5rem, 6vw, 2.2rem); color: #2c3e50; }
+    #onboarding-screen p { font-size: clamp(0.9rem, 3.5vw, 1.05rem); color: #7f8c8d; margin-top: 8px; }
+    .character-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 30px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .char-select {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.1s;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #e0e0e0;
+      min-height: 100px;
+    }
+    .char-select:active { transform: scale(0.95); }
+
+    /* --- Main Screen Shell --- */
+    #main-screen {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+      position: relative;
+    }
+    .view-container {
+      flex: 1 1 auto;
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .app-view {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      transition: opacity 0.2s ease;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .app-view.active { opacity: 1; pointer-events: all; z-index: 2; }
+
+    /* === REUSABLE UI ELEMENTS === */
+    .top-nav {
+      position: absolute;
+      top: calc(20px + env(safe-area-inset-top));
+      left: 0;
+      width: 100%;
+      padding: 0 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      gap: 8px;
+    }
+    .icon-btn {
+      background: rgba(255,255,255,0.9);
+      border: none;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      font-size: 1.3rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      transition: transform 0.1s;
+    }
+    .icon-btn:active { transform: scale(0.9); }
+    .currency-pill {
+      background: rgba(255,255,255,0.9);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      font-size: clamp(0.85rem, 3vw, 1rem);
+      min-height: 32px;
+    }
+
+    .xp-container {
+      position: absolute;
+      top: calc(80px + env(safe-area-inset-top));
+      left: 10%;
+      width: 80%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 10;
+    }
+    .xp-header { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 700; color: #8B4513; }
+    .xp-track { background-color: rgba(255,255,255,0.6); height: 12px; border-radius: 10px; overflow: hidden; }
+    .xp-fill { background-color: #FFC107; height: 100%; width: 0%; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+    .avatar-display {
+      width: clamp(90px, 22vw, 130px);
+      height: clamp(90px, 22vw, 130px);
+      position: relative;
+      z-index: 2;
+      transition: background-image 0.3s;
+      background-size: contain;
+      background-position: center bottom;
+      background-repeat: no-repeat;
+      background-color: transparent !important;
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    .task-area {
+      background-color: #42C2B3;
+      flex: 1 1 auto;
+      padding: 20px 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      min-height: 0;
+    }
+    .task-area::-webkit-scrollbar { display: none; }
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+      margin-bottom: 15px;
+      gap: 10px;
+    }
+    .task-header h3 { font-size: clamp(1rem, 4vw, 1.2rem); }
+    .task-item {
+      background-color: white;
+      border-radius: 20px;
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      transition: all 0.4s ease;
+      opacity: 1;
+      transform: scale(1);
+      min-height: 70px;
+    }
+    .task-item.hiding {
+      opacity: 0;
+      transform: scale(0.8);
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      max-height: 0;
+      overflow: hidden;
+      border: none;
+    }
+    .task-icon {
+      font-size: 1.5rem;
+      background: #f0f8ff;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .task-info {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+    }
+    .task-title {
+      font-weight: bold;
+      color: #333;
+      font-size: 1rem;
+      word-wrap: break-word;
+    }
+    .task-reward {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.8rem;
+      color: #777;
+      margin-top: 2px;
+      flex-wrap: wrap;
+    }
+    .freq-badge {
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .task-check {
+      background-color: #f0f0f0;
+      border: none;
+      border-radius: 12px;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      font-size: 1.2rem;
+      color: transparent;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .task-item.completed .task-check { background-color: #4CAF50; color: white; }
+
+    /* === HOME VIEW === */
+    .home-environment {
+      background-color: #FFE4B5;
+      flex: 0 0 38%;
+      min-height: 240px;
+      width: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 16px;
+      padding-top: env(safe-area-inset-top);
+      border-bottom: 3px solid rgba(0,0,0,0.05);
+    }
+
+    /* === TASKS MENU VIEW === */
+    #tasks-view {
+      background-color: #f4f4f9;
+      padding: calc(20px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .page-header {
+      margin-top: 10px;
+      margin-bottom: 20px;
+      color: #2c3e50;
+      text-align: center;
+    }
+    .page-header h2 { font-size: clamp(1.3rem, 5vw, 1.6rem); }
+    .page-header p { font-size: 0.9rem; color: #7f8c8d; margin-top: 5px; }
+    .bank-item {
+      background: white;
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      flex-wrap: wrap;
+    }
+    .bank-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1 1 60%;
+      min-width: 0;
+    }
+    .bank-left > div:last-child { min-width: 0; flex: 1; }
+    .bank-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .add-btn {
+      background: #E0F2F1;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #42C2B3;
+      cursor: pointer;
+      transition: background 0.2s;
+      min-width: 44px;
+      min-height: 44px;
+    }
+    .add-btn:active { background: #42C2B3; color: white; }
+
+    /* === WORK VIEW === */
+    #work-view {
+      background-color: #f4f4f9;
+      width: 100%;
+      height: 100%;
+    }
+    #job-selection-state {
+      padding: calc(20px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      height: 100%;
+      width: 100%;
+    }
+    .job-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+      width: 100%;
+    }
+    .job-card {
+      background: white;
+      border-radius: 16px;
+      padding: 18px 10px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.1s;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .job-card:active { transform: scale(0.95); }
+    .job-card-icon { font-size: 2.4rem; margin-bottom: 8px; }
+    .job-card-title { font-weight: bold; color: #2c3e50; font-size: 0.9rem; }
+
+    #active-work-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .workplace-environment {
+      background-color: #CFD8DC;
+      flex: 0 0 38%;
+      min-height: 240px;
+      width: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 16px;
+      padding-top: env(safe-area-inset-top);
+    }
+    .job-badge {
+      background: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 900;
+      color: #34495e;
+      margin-bottom: 5px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      text-transform: uppercase;
+      font-size: clamp(0.8rem, 3vw, 0.95rem);
+      max-width: 80%;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .job-position {
+      color: #546E7A;
+      font-weight: bold;
+      font-size: 0.8rem;
+      margin-bottom: 12px;
+      max-width: 80%;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .work-panel {
+      background: #42C2B3;
+      flex: 1 1 auto;
+      padding: 16px 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .shift-info-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .clock-in-btn {
+      background: #E63946;
+      color: white;
+      border: none;
+      padding: 14px 30px;
+      border-radius: 25px;
+      font-size: 1.05rem;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(230,57,70,0.4);
+      cursor: pointer;
+      transition: transform 0.1s;
+      margin-top: 10px;
+      min-height: 48px;
+      width: auto;
+    }
+    .clock-in-btn:active { transform: scale(0.95); }
+    .clock-in-btn:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
+
+    .pay-summary-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      border-left: 4px solid #42C2B3;
+    }
+    .pay-summary-card h4 {
+      font-size: 0.8rem;
+      color: #7f8c8d;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .pay-summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      gap: 10px;
+    }
+    .pay-summary-label { font-size: 0.85rem; color: #555; }
+    .pay-summary-value {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #2c3e50;
+      text-align: right;
+    }
+    .pay-summary-value.highlight { color: #42C2B3; font-size: 1.05rem; }
+    .pay-summary-value.payday { color: #4CAF50; font-size: 1.05rem; }
+
+    /* === SETTINGS OVERLAYS (position:fixed, outside app-container) === */
+    #work-settings-overlay, #home-settings-overlay {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background-color: #f4f4f9;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    #work-settings-overlay.active, #home-settings-overlay.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: all;
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      flex-shrink: 0;
+    }
+    .settings-header h2 { font-size: 1.2rem; color: #2c3e50; }
+    .close-btn {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+    .settings-tabs {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid #ddd;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      flex-shrink: 0;
+    }
+    .settings-tabs::-webkit-scrollbar { display: none; }
+    .settings-tab-btn {
+      flex: 1 0 auto;
+      min-width: 80px;
+      padding: 14px 8px;
+      background: none;
+      border: none;
+      font-weight: bold;
+      color: #7f8c8d;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      min-height: 48px;
+    }
+    .settings-tab-btn.active { color: #42C2B3; border-bottom: 3px solid #42C2B3; }
+    .settings-content {
+      flex: 1 1 auto;
+      padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      min-height: 0;
+    }
+    .settings-pane { display: none; }
+    .settings-pane.active { display: block; }
+    .form-group { margin-bottom: 20px; text-align: left; }
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #34495e;
+      font-size: 0.9rem;
+    }
+    /* font-size: 16px prevents iOS auto-zoom on input focus */
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+      min-height: 48px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .form-group select {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237f8c8d'><path d='M7 10l5 5 5-5z'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 20px;
+      padding-right: 40px;
+    }
+    .save-btn {
+      background: #42C2B3;
+      color: white;
+      border: none;
+      padding: 16px;
+      width: 100%;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      min-height: 50px;
+    }
+    .save-btn:active { transform: scale(0.98); }
+
+    .scheduled-shift-item {
+      background: white;
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid #eee;
+    }
+    .scheduled-shift-item button {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 12px;
+    }
+
+    /* Pay type toggle */
+    .pay-type-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 15px;
+    }
+    .pay-type-btn {
+      flex: 1;
+      padding: 12px;
+      background: none;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      color: #7f8c8d;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      min-height: 44px;
+    }
+    .pay-type-btn.active {
+      background: white;
+      color: #42C2B3;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .pay-cycle-info {
+      background: #E0F2F1;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+    }
+    .pay-cycle-info p { font-size: 0.85rem; color: #00695C; font-weight: 600; line-height: 1.5; }
+    .pay-cycle-info span { color: #2c3e50; }
+
+    /* === SHOP / VENDING MACHINE === */
+    #shop-view {
+      background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+      padding: calc(20px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #shop-view .page-header { color: white; }
+    #shop-view .page-header p { color: #bdc3c7; }
+    .vending-machine {
+      background: linear-gradient(180deg, #E63946 0%, #C1121F 100%);
+      border-radius: 24px;
+      padding: 18px 14px 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.15);
+      border: 4px solid #8B0000;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .vending-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      background: rgba(0,0,0,0.35);
+      padding: 14px;
+      border-radius: 14px;
+      box-shadow: inset 0 4px 10px rgba(0,0,0,0.4);
+    }
+    @media (min-width: 600px) {
+      .vending-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .vending-slot {
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.6);
+      min-height: 150px;
+      justify-content: space-between;
+    }
+    .vending-item {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: 80px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: white;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+    }
+    .vending-buy-btn {
+      width: 100%;
+      padding: 8px 4px;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: white;
+      min-height: 38px;
+      transition: transform 0.1s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .vending-buy-btn.hearts { background: #E91E63; box-shadow: 0 3px 0 #AD1457; }
+    .vending-buy-btn.energy { background: #FFA000; box-shadow: 0 3px 0 #E65100; }
+    .vending-buy-btn:active { transform: translateY(2px); box-shadow: none; }
+    .vending-buy-btn:disabled {
+      background: #9e9e9e;
+      box-shadow: 0 3px 0 #616161;
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    /* === BAG / INVENTORY === */
+    #bag-view {
+      background-color: #f4f4f9;
+      padding: calc(20px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .bag-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .bag-slot {
+      background: white;
+      border-radius: 14px;
+      padding: 14px 8px 10px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+    .bag-slot .vending-item { max-width: 60px; font-size: 0.8rem; }
+    .bag-slot-label {
+      font-size: 0.75rem;
+      color: #555;
+      font-weight: bold;
+    }
+    .bag-slot-count {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      background: #42C2B3;
+      color: white;
+      font-size: 0.75rem;
+      font-weight: bold;
+      border-radius: 10px;
+      padding: 2px 7px;
+      min-width: 22px;
+      text-align: center;
+    }
+    .bag-empty {
+      text-align: center;
+      color: #7f8c8d;
+      padding: 40px 20px;
+      font-size: 0.95rem;
+    }
+    .bag-empty.hidden { display: none; }
+
+    /* === FIXED BOTTOM NAV === */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background-color: #E0F2F1;
+      border-radius: 25px 25px 0 0;
+      padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+      z-index: 10;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #7F8C8D;
+      font-size: 0.7rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: color 0.2s;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 4px 6px;
+      flex: 1;
+    }
+    .nav-item.active { color: #42C2B3; }
+    .nav-icon { font-size: 1.4rem; margin-bottom: 2px; }
+
+    /* === LEVEL UP MODAL === */
+    #level-up-modal {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background-color: rgba(0,0,0,0.7);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      backdrop-filter: blur(3px);
+      padding: 20px;
+    }
+    .level-up-card {
+      background: white;
+      padding: clamp(24px, 7vw, 40px);
+      border-radius: 25px;
+      text-align: center;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+      animation: popIn 0.6s cubic-bezier(0.175,0.885,0.32,1.275) forwards, floatPulse 3s infinite ease-in-out 0.6s;
+      pointer-events: none;
+      max-width: 90%;
+    }
+    .level-up-icon { font-size: clamp(3rem, 12vw, 4rem); margin-bottom: 10px; }
+    .level-up-title {
+      font-size: clamp(1.8rem, 8vw, 2.5rem);
+      font-weight: 900;
+      color: #FFC107;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      text-shadow: 2px 2px 0px #FF9800;
+    }
+    .level-up-subtitle { color: #7f8c8d; font-size: 1rem; font-weight: bold; }
+    .tap-to-continue { margin-top: 25px; font-size: 0.8rem; color: #bdc3c7; animation: blink 1.5s infinite; }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes floatPulse { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-10px) scale(1.02); } }
+    @keyframes blink { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    /* === DESKTOP RESPONSIVE ENHANCEMENTS === */
+    @media (min-width: 768px) {
+      .job-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      }
+      .character-grid {
+        max-width: 400px;
+      }
+      .settings-tab-btn { font-size: 1rem; }
+      .home-environment, .workplace-environment {
+        flex: 0 0 35%;
+        min-height: 280px;
+      }
+    }
+
+    @media (min-width: 1200px) {
+      .home-environment, .workplace-environment {
+        min-height: 320px;
+      }
+      .avatar-display {
+        width: 150px;
+        height: 150px;
+      }
+    }
+
+    /* === LANDSCAPE PHONE HANDLING === */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .home-environment, .workplace-environment {
+        flex: 0 0 50%;
+        min-height: 180px;
+      }
+      .avatar-display { width: 80px; height: 80px; }
+      .xp-container { top: 70px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- OVERLAYS (outside app-container, position:fixed to escape stacking contexts) -->
+  <div id="home-settings-overlay">
+    <div class="settings-header">
+      <h2>App Settings</h2>
+      <button class="close-btn" onclick="AppLogic.toggleHomeSettings(false)">×</button>
+    </div>
+    <div class="settings-content">
+      <div style="background:white; padding:24px 18px; border-radius:16px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.05); margin-top:10px; border:2px solid #ffcccc;">
+        <h3 style="color:#e74c3c; margin-bottom:10px;">⚠️ Danger Zone</h3>
+        <p style="font-size:0.9rem; color:#7f8c8d; margin-bottom:20px; line-height:1.5;">This will completely wipe your profile, jobs, schedule, and all task progress. This action cannot be undone.</p>
+        <button class="clock-in-btn" style="background:#e74c3c; width:100%; box-shadow:0 4px 10px rgba(231,76,60,0.4);" onclick="AppLogic.confirmReset()">Reset All Progress</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="work-settings-overlay">
+    <div class="settings-header">
+      <h2>Work Settings</h2>
+      <button class="close-btn" onclick="AppLogic.toggleWorkSettings(false)">×</button>
+    </div>
+    <div class="settings-tabs">
+      <button class="settings-tab-btn active" data-tab="profile" onclick="AppLogic.switchSettingsTab(this)">Profile</button>
+      <button class="settings-tab-btn" data-tab="pay" onclick="AppLogic.switchSettingsTab(this)">Pay</button>
+      <button class="settings-tab-btn" data-tab="tasks" onclick="AppLogic.switchSettingsTab(this)">Tasks</button>
+      <button class="settings-tab-btn" data-tab="schedule" onclick="AppLogic.switchSettingsTab(this)">Schedule</button>
+    </div>
+    <div class="settings-content">
+
+      <div id="pane-profile" class="settings-pane active">
+        <div class="form-group">
+          <label>Company / Location Name</label>
+          <input type="text" id="input-job-name" placeholder="e.g. Dunder Mifflin" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Your Position</label>
+          <input type="text" id="input-position" placeholder="e.g. Regional Manager" autocomplete="off">
+        </div>
+        <button class="save-btn" onclick="AppLogic.saveWorkProfile()">Save Profile</button>
+      </div>
+
+      <div id="pane-pay" class="settings-pane">
+        <div class="form-group">
+          <label>Pay Type</label>
+          <div class="pay-type-toggle">
+            <button class="pay-type-btn active" id="btn-pay-hourly" onclick="AppLogic.setPayType('hourly')">💵 Hourly</button>
+            <button class="pay-type-btn" id="btn-pay-salary" onclick="AppLogic.setPayType('salary')">💼 Salary</button>
+          </div>
+        </div>
+        <div id="hourly-fields" class="form-group">
+          <label>Hourly Rate ($)</label>
+          <input type="number" id="input-hourly-rate" placeholder="e.g. 12.00" step="0.01" min="0" inputmode="decimal">
+        </div>
+        <div id="salary-fields" class="form-group hidden">
+          <label>Annual Salary ($)</label>
+          <input type="number" id="input-salary-amount" placeholder="e.g. 45000" step="1" min="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>Pay Cycle Frequency</label>
+          <select id="input-pay-freq" onchange="AppLogic.updatePayCyclePreview()">
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Bi-Weekly (Every 2 Weeks)</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pay Day (day your check arrives)</label>
+          <select id="input-pay-day" onchange="AppLogic.updatePayCyclePreview()">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>State (for tax estimate)</label>
+          <select id="input-state">
+            <option value="">— Select State —</option>
+            <option value="AL">Alabama</option><option value="AK">Alaska</option><option value="AZ">Arizona</option><option value="AR">Arkansas</option><option value="CA">California</option><option value="CO">Colorado</option><option value="CT">Connecticut</option><option value="DE">Delaware</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="HI">Hawaii</option><option value="ID">Idaho</option><option value="IL">Illinois</option><option value="IN">Indiana</option><option value="IA">Iowa</option><option value="KS">Kansas</option><option value="KY">Kentucky</option><option value="LA">Louisiana</option><option value="ME">Maine</option><option value="MD">Maryland</option><option value="MA">Massachusetts</option><option value="MI">Michigan</option><option value="MN">Minnesota</option><option value="MS">Mississippi</option><option value="MO">Missouri</option><option value="MT">Montana</option><option value="NE">Nebraska</option><option value="NV">Nevada</option><option value="NH">New Hampshire</option><option value="NJ">New Jersey</option><option value="NM">New Mexico</option><option value="NY">New York</option><option value="NC">North Carolina</option><option value="ND">North Dakota</option><option value="OH">Ohio</option><option value="OK">Oklahoma</option><option value="OR">Oregon</option><option value="PA">Pennsylvania</option><option value="RI">Rhode Island</option><option value="SC">South Carolina</option><option value="SD">South Dakota</option><option value="TN">Tennessee</option><option value="TX">Texas</option><option value="UT">Utah</option><option value="VT">Vermont</option><option value="VA">Virginia</option><option value="WA">Washington</option><option value="WV">West Virginia</option><option value="WI">Wisconsin</option><option value="WY">Wyoming</option>
+          </select>
+        </div>
+        <div class="pay-cycle-info" id="pay-cycle-preview">
+          <p>📅 Pay cycle preview will show here.</p>
+        </div>
+        <button class="save-btn" onclick="AppLogic.savePayData()">Save Payroll Settings</button>
+      </div>
+
+      <div id="pane-tasks" class="settings-pane">
+        <div class="form-group">
+          <label>Add a Work Task</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <input type="text" id="input-work-task" placeholder="e.g. Check emails" autocomplete="off" style="flex:1; min-width:0;">
+            <button class="save-btn" style="width:auto; padding:0 20px; flex-shrink:0;" onclick="AppLogic.addWorkTask()">Add</button>
+          </div>
+        </div>
+        <p style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">These tasks only appear when you are at work.</p>
+        <div id="settings-work-tasks-list"></div>
+      </div>
+
+      <div id="pane-schedule" class="settings-pane">
+        <p style="font-size:0.8rem; color:#7f8c8d; margin-bottom:15px;">Add shifts to your calendar ahead of time.</p>
+        <div style="background:white; padding:16px; border-radius:12px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:20px;">
+          <div class="form-group">
+            <label>Shift Date</label>
+            <input type="date" id="input-shift-date">
+          </div>
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1; min-width:0;">
+              <label>Start Time</label>
+              <input type="time" id="input-shift-start" value="09:00">
+            </div>
+            <div class="form-group" style="flex:1; min-width:0;">
+              <label>End Time</label>
+              <input type="time" id="input-shift-end" value="17:00">
+            </div>
+          </div>
+          <button class="save-btn" onclick="AppLogic.addSpecificShift()">Add to Calendar</button>
+        </div>
+        <h3 style="color:#2c3e50; font-size:1.1rem; margin-bottom:10px;">Upcoming Shifts</h3>
+        <div id="shift-list-container"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="app-container">
+
+    <div id="onboarding-screen" class="screen">
+      <h1>Welcome Home</h1>
+      <p>Select your avatar to begin.</p>
+      <div class="character-grid">
+        <button class="char-select" data-avatar="gronk 1.png" style="background-image: url('gronk 1.png');"></button>
+        <button class="char-select" data-avatar="GronkHUE1.png" style="background-image: url('GronkHUE1.png');"></button>
+        <button class="char-select" data-avatar="GronkHUE2.png" style="background-image: url('GronkHUE2.png');"></button>
+        <button class="char-select" data-avatar="GronkHUE3.png" style="background-image: url('GronkHUE3.png');"></button>
+      </div>
+    </div>
+
+    <div id="level-up-modal" class="hidden" onclick="this.classList.add('hidden')">
+      <div class="level-up-card">
+        <div class="level-up-icon">🌟</div>
+        <div class="level-up-title">Level Up!</div>
+        <div class="level-up-subtitle">You reached Level <span id="modal-level-text">2</span></div>
+        <div class="tap-to-continue">Tap anywhere to continue</div>
+      </div>
+    </div>
+
+    <div id="main-screen" class="screen hidden">
+      <div class="view-container">
+
+        <div id="home-view" class="app-view active">
+          <div class="home-environment">
+            <div class="top-nav">
+              <button class="icon-btn" onclick="AppLogic.toggleHomeSettings(true)">☰</button>
+              <div style="display:flex; gap:8px;">
+                <div class="currency-pill">❤️ <span id="ui-hearts">0</span></div>
+                <div class="currency-pill">⚡ <span id="ui-energy">0</span></div>
+              </div>
+            </div>
+            <div class="xp-container">
+              <div class="xp-header">
+                <span>⭐ Level <span id="ui-level">1</span></span>
+                <span id="ui-xp-text">0 / 50</span>
+              </div>
+              <div class="xp-track"><div id="ui-xp-fill" class="xp-fill"></div></div>
+            </div>
+            <div id="home-avatar" class="avatar-display"></div>
+          </div>
+          <div class="task-area">
+            <div class="task-header">
+              <h3 id="ui-task-count">📅 No goals set yet!</h3>
+              <div style="display:flex; gap:10px;">
+                <span style="cursor:pointer; padding:8px;" onclick="AppLogic.switchView('tasks-view')">➕ Add</span>
+              </div>
+            </div>
+            <div id="task-list-container"></div>
+          </div>
+        </div>
+
+        <div id="tasks-view" class="app-view">
+          <div class="page-header"><h2>Goal Menu</h2><p>Select habits to add to Home.</p></div>
+          <div id="task-bank-container"></div>
+        </div>
+
+        <div id="work-view" class="app-view">
+          <div id="job-selection-state" class="hidden">
+            <div class="page-header"><h2>Job Market</h2><p>Where do you want to work?</p></div>
+            <div id="job-grid-container" class="job-grid"></div>
+          </div>
+          <div id="active-work-state" class="hidden">
+            <div class="workplace-environment">
+              <div class="top-nav">
+                <button class="icon-btn" onclick="AppLogic.toggleWorkSettings(true)">⚙️</button>
+                <div style="display:flex; gap:8px;">
+                  <div class="currency-pill">❤️ <span id="ui-hearts-work">0</span></div>
+                  <div class="currency-pill">⚡ <span id="ui-energy-work">0</span></div>
+                </div>
+              </div>
+              <div id="ui-job-title" class="job-badge">Supercenter</div>
+              <div id="ui-job-position" class="job-position">Associate</div>
+              <div id="work-avatar" class="avatar-display"></div>
+            </div>
+            <div class="work-panel">
+              <div class="shift-info-card" id="card-shift-idle">
+                <p style="font-size:0.9rem; color:#7f8c8d; font-weight:bold; margin-bottom:5px;" id="ui-today-day">Today</p>
+                <h3 style="color:#2c3e50; margin-bottom:10px; font-size:1.1rem;" id="ui-today-shift">No shift scheduled</h3>
+                <button class="clock-in-btn" id="btn-clock-in" onclick="AppLogic.clockIn()">Clock In</button>
+              </div>
+              <div class="shift-info-card hidden" id="card-shift-active" style="border:2px solid #4CAF50;">
+                <p style="font-size:0.9rem; color:#4CAF50; font-weight:bold; margin-bottom:5px;">● On the Clock</p>
+                <p style="font-size:0.85rem; color:#7f8c8d; margin-bottom:5px;">Punched in at: <strong id="ui-punch-in-time">--:--</strong></p>
+                <h2 style="color:#2c3e50; font-size:clamp(1.8rem, 7vw, 2.4rem); margin:10px 0; font-family:monospace; font-weight:900;" id="ui-shift-countdown">00:00:00</h2>
+                <p style="font-size:0.8rem; color:#bdc3c7; margin-bottom:15px;">Remaining until shift ends</p>
+                <button class="clock-in-btn" style="background:#4CAF50; box-shadow:0 4px 10px rgba(76,175,80,0.4);" onclick="AppLogic.clockOut()">Clock Out</button>
+              </div>
+              <div class="pay-summary-card hidden" id="card-pay-summary">
+                <h4>💰 This Pay Cycle <span style="font-weight:normal; text-transform:none; color:#999;">(estimated)</span></h4>
+                <div class="pay-summary-row">
+                  <span class="pay-summary-label">Cycle</span>
+                  <span class="pay-summary-value" id="ui-pay-cycle-range">—</span>
+                </div>
+                <div class="pay-summary-row">
+                  <span class="pay-summary-label">Hours Scheduled</span>
+                  <span class="pay-summary-value highlight" id="ui-pay-cycle-hours">0 hrs</span>
+                </div>
+                <div class="pay-summary-row">
+                  <span class="pay-summary-label">Gross Pay</span>
+                  <span class="pay-summary-value" id="ui-pay-cycle-earn">$0.00</span>
+                </div>
+                <div class="pay-summary-row tax-row hidden" id="row-federal-tax">
+                  <span class="pay-summary-label" style="color:#c0392b;">− Federal Tax</span>
+                  <span class="pay-summary-value" id="ui-federal-tax" style="color:#c0392b;">$0.00</span>
+                </div>
+                <div class="pay-summary-row tax-row hidden" id="row-state-tax">
+                  <span class="pay-summary-label" style="color:#c0392b;">− State Tax (<span id="ui-state-label">—</span>)</span>
+                  <span class="pay-summary-value" id="ui-state-tax" style="color:#c0392b;">$0.00</span>
+                </div>
+                <div class="pay-summary-row" style="border-top:1px solid #eee; padding-top:8px; margin-top:8px;">
+                  <span class="pay-summary-label" style="font-weight:bold;">Est. Take-Home</span>
+                  <span class="pay-summary-value payday" id="ui-net-pay">$0.00</span>
+                </div>
+                <div class="pay-summary-row">
+                  <span class="pay-summary-label">Next Pay Day</span>
+                  <span class="pay-summary-value" id="ui-next-payday">—</span>
+                </div>
+              </div>
+              <div class="task-header" style="margin-top:10px;">
+                <h3 style="font-size:1rem;">📋 Work Tasks</h3>
+              </div>
+              <div id="work-task-list-container"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shop-view" class="app-view">
+          <div class="page-header"><h2>🏪 Vending Machine</h2><p>Spend hearts or energy on goodies.</p></div>
+          <div class="vending-machine">
+            <div id="vending-grid-container" class="vending-grid"></div>
+          </div>
+        </div>
+
+        <div id="bag-view" class="app-view">
+          <div class="page-header"><h2>💼 Your Bag</h2><p>Items you've collected.</p></div>
+          <div id="bag-grid-container" class="bag-grid"></div>
+          <div id="bag-empty-message" class="bag-empty">Your bag is empty. Visit the Shop! 🛒</div>
+        </div>
+
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item active" data-target="home-view"><span class="nav-icon">🏠</span>Home</div>
+        <div class="nav-item" data-target="work-view"><span class="nav-icon">🏢</span>Work</div>
+        <div class="nav-item" data-target="tasks-view"><span class="nav-icon">📋</span>Tasks</div>
+        <div class="nav-item" data-target="shop-view"><span class="nav-icon">🏪</span>Shop</div>
+        <div class="nav-item" data-target="bag-view"><span class="nav-icon">💼</span>Bag</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const TaskBank = [
+        { templateId: 't1', text: "Drink Water", reward: 20, icon: "💧" },
+        { templateId: 't2', text: "Eat Food", reward: 20, icon: "🍱" },
+        { templateId: 't3', text: "Brush Teeth", reward: 20, icon: "🪥" },
+        { templateId: 't4', text: "Take Shower", reward: 30, icon: "🚿" },
+        { templateId: 't5', text: "Do Dishes", reward: 30, icon: "🍽️" },
+        { templateId: 't6', text: "Clean Room", reward: 40, icon: "🧹" },
+        { templateId: 't7', text: "Do Laundry", reward: 40, icon: "🧺" },
+        { templateId: 't8', text: "Read 10 Pages", reward: 30, icon: "📚" },
+        { templateId: 't9', text: "Stretch / Yoga", reward: 40, icon: "🧘" }
+    ];
+
+    const JobCategories = [
+        { id: 'supercenter', name: "Supercenter", icon: "🏬" },
+        { id: 'grocery', name: "Grocery Store", icon: "🛒" },
+        { id: 'smoke_shop', name: "Smoke Shop", icon: "💨" },
+        { id: 'fast_food', name: "Fast Food", icon: "🍔" },
+        { id: 'restaurant', name: "Restaurant", icon: "🍽️" },
+        { id: 'cafe', name: "Coffee Shop", icon: "☕" },
+        { id: 'healthcare', name: "Clinic / Hospital", icon: "🏥" },
+        { id: 'office', name: "Corporate Office", icon: "💻" },
+        { id: 'warehouse', name: "Warehouse", icon: "📦" },
+        { id: 'construction', name: "Construction", icon: "🚧" },
+        { id: 'retail', name: "Retail Boutique", icon: "🛍️" },
+        { id: 'education', name: "School / Education", icon: "🏫" },
+        { id: 'delivery', name: "Delivery Driver", icon: "🚚" },
+        { id: 'gym', name: "Gym / Fitness", icon: "🏋️" },
+        { id: 'salon', name: "Salon / Spa", icon: "✂️" },
+        { id: 'startup', name: "Tech Startup", icon: "🚀" }
+    ];
+
+    const DayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const DayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // === TAX TABLES (2024, single filer) ===
+    // Federal: progressive brackets — annual income → tax owed
+    // Standard deduction $14,600 applied before brackets
+    const FED_STANDARD_DEDUCTION = 14600;
+    const FED_BRACKETS = [
+        { upTo: 11600,   rate: 0.10 },
+        { upTo: 47150,   rate: 0.12 },
+        { upTo: 100525,  rate: 0.22 },
+        { upTo: 191950,  rate: 0.24 },
+        { upTo: 243725,  rate: 0.32 },
+        { upTo: 609350,  rate: 0.35 },
+        { upTo: Infinity,rate: 0.37 }
+    ];
+
+    // State income tax 2024. Two formats:
+    //   { type: 'none' } — no state income tax
+    //   { type: 'flat', rate: 0.0X } — flat percent (deduction applied first if specified)
+    //   { type: 'brackets', deduction: N, brackets: [...] } — progressive
+    const STATE_TAX = {
+        AL: { type: 'brackets', deduction: 3000, brackets: [{upTo:500,rate:0.02},{upTo:3000,rate:0.04},{upTo:Infinity,rate:0.05}] },
+        AK: { type: 'none' },
+        AZ: { type: 'flat', rate: 0.025 },
+        AR: { type: 'brackets', deduction: 2340, brackets: [{upTo:5300,rate:0.02},{upTo:10600,rate:0.04},{upTo:Infinity,rate:0.044}] },
+        CA: { type: 'brackets', deduction: 5363, brackets: [{upTo:10412,rate:0.01},{upTo:24684,rate:0.02},{upTo:38959,rate:0.04},{upTo:54081,rate:0.06},{upTo:68350,rate:0.08},{upTo:349137,rate:0.093},{upTo:418961,rate:0.103},{upTo:698271,rate:0.113},{upTo:Infinity,rate:0.123}] },
+        CO: { type: 'flat', rate: 0.044 },
+        CT: { type: 'brackets', deduction: 0, brackets: [{upTo:10000,rate:0.02},{upTo:50000,rate:0.045},{upTo:100000,rate:0.055},{upTo:200000,rate:0.06},{upTo:250000,rate:0.065},{upTo:500000,rate:0.069},{upTo:Infinity,rate:0.0699}] },
+        DE: { type: 'brackets', deduction: 3250, brackets: [{upTo:2000,rate:0},{upTo:5000,rate:0.022},{upTo:10000,rate:0.039},{upTo:20000,rate:0.048},{upTo:25000,rate:0.052},{upTo:60000,rate:0.0555},{upTo:Infinity,rate:0.066}] },
+        FL: { type: 'none' },
+        GA: { type: 'flat', rate: 0.0539, deduction: 12000 },
+        HI: { type: 'brackets', deduction: 2200, brackets: [{upTo:2400,rate:0.014},{upTo:4800,rate:0.032},{upTo:9600,rate:0.055},{upTo:14400,rate:0.064},{upTo:19200,rate:0.068},{upTo:24000,rate:0.072},{upTo:36000,rate:0.076},{upTo:48000,rate:0.079},{upTo:150000,rate:0.0825},{upTo:175000,rate:0.09},{upTo:200000,rate:0.10},{upTo:Infinity,rate:0.11}] },
+        ID: { type: 'flat', rate: 0.058, deduction: 14600 },
+        IL: { type: 'flat', rate: 0.0495, deduction: 2775 },
+        IN: { type: 'flat', rate: 0.0305 },
+        IA: { type: 'brackets', deduction: 2210, brackets: [{upTo:6210,rate:0.044},{upTo:31050,rate:0.0482},{upTo:Infinity,rate:0.057}] },
+        KS: { type: 'brackets', deduction: 3500, brackets: [{upTo:15000,rate:0.031},{upTo:30000,rate:0.0525},{upTo:Infinity,rate:0.057}] },
+        KY: { type: 'flat', rate: 0.04, deduction: 3160 },
+        LA: { type: 'brackets', deduction: 4500, brackets: [{upTo:12500,rate:0.0185},{upTo:50000,rate:0.035},{upTo:Infinity,rate:0.0425}] },
+        ME: { type: 'brackets', deduction: 14600, brackets: [{upTo:26050,rate:0.058},{upTo:61600,rate:0.0675},{upTo:Infinity,rate:0.0715}] },
+        MD: { type: 'brackets', deduction: 2550, brackets: [{upTo:1000,rate:0.02},{upTo:2000,rate:0.03},{upTo:3000,rate:0.04},{upTo:100000,rate:0.0475},{upTo:125000,rate:0.05},{upTo:150000,rate:0.0525},{upTo:250000,rate:0.055},{upTo:Infinity,rate:0.0575}] },
+        MA: { type: 'flat', rate: 0.05 },
+        MI: { type: 'flat', rate: 0.0425, deduction: 5600 },
+        MN: { type: 'brackets', deduction: 14575, brackets: [{upTo:31690,rate:0.0535},{upTo:104090,rate:0.068},{upTo:193240,rate:0.0785},{upTo:Infinity,rate:0.0985}] },
+        MS: { type: 'flat', rate: 0.047, deduction: 2300 },
+        MO: { type: 'brackets', deduction: 14600, brackets: [{upTo:1273,rate:0.02},{upTo:2546,rate:0.025},{upTo:3819,rate:0.03},{upTo:5092,rate:0.035},{upTo:6365,rate:0.04},{upTo:7638,rate:0.045},{upTo:8911,rate:0.0485},{upTo:Infinity,rate:0.048}] },
+        MT: { type: 'brackets', deduction: 14600, brackets: [{upTo:20500,rate:0.047},{upTo:Infinity,rate:0.059}] },
+        NE: { type: 'brackets', deduction: 7900, brackets: [{upTo:3700,rate:0.0246},{upTo:22170,rate:0.0351},{upTo:35730,rate:0.0501},{upTo:Infinity,rate:0.0584}] },
+        NV: { type: 'none' },
+        NH: { type: 'none' },
+        NJ: { type: 'brackets', deduction: 0, brackets: [{upTo:20000,rate:0.014},{upTo:35000,rate:0.0175},{upTo:40000,rate:0.035},{upTo:75000,rate:0.05525},{upTo:500000,rate:0.0637},{upTo:1000000,rate:0.0897},{upTo:Infinity,rate:0.1075}] },
+        NM: { type: 'brackets', deduction: 14600, brackets: [{upTo:5500,rate:0.017},{upTo:16500,rate:0.032},{upTo:33500,rate:0.047},{upTo:210000,rate:0.049},{upTo:Infinity,rate:0.059}] },
+        NY: { type: 'brackets', deduction: 8000, brackets: [{upTo:8500,rate:0.04},{upTo:11700,rate:0.045},{upTo:13900,rate:0.0525},{upTo:80650,rate:0.055},{upTo:215400,rate:0.06},{upTo:1077550,rate:0.0685},{upTo:5000000,rate:0.0965},{upTo:Infinity,rate:0.103}] },
+        NC: { type: 'flat', rate: 0.045, deduction: 12750 },
+        ND: { type: 'brackets', deduction: 14600, brackets: [{upTo:44725,rate:0},{upTo:225975,rate:0.0195},{upTo:Infinity,rate:0.025}] },
+        OH: { type: 'brackets', deduction: 0, brackets: [{upTo:26050,rate:0},{upTo:100000,rate:0.0275},{upTo:Infinity,rate:0.035}] },
+        OK: { type: 'brackets', deduction: 6350, brackets: [{upTo:1000,rate:0.0025},{upTo:2500,rate:0.0075},{upTo:3750,rate:0.0175},{upTo:4900,rate:0.0275},{upTo:7200,rate:0.0375},{upTo:Infinity,rate:0.0475}] },
+        OR: { type: 'brackets', deduction: 2745, brackets: [{upTo:4300,rate:0.0475},{upTo:10750,rate:0.0675},{upTo:125000,rate:0.0875},{upTo:Infinity,rate:0.099}] },
+        PA: { type: 'flat', rate: 0.0307 },
+        RI: { type: 'brackets', deduction: 10550, brackets: [{upTo:77450,rate:0.0375},{upTo:176050,rate:0.0475},{upTo:Infinity,rate:0.0599}] },
+        SC: { type: 'brackets', deduction: 14600, brackets: [{upTo:3460,rate:0},{upTo:17330,rate:0.03},{upTo:Infinity,rate:0.064}] },
+        SD: { type: 'none' },
+        TN: { type: 'none' },
+        TX: { type: 'none' },
+        UT: { type: 'flat', rate: 0.0455 },
+        VT: { type: 'brackets', deduction: 7400, brackets: [{upTo:45400,rate:0.0335},{upTo:110050,rate:0.066},{upTo:229550,rate:0.076},{upTo:Infinity,rate:0.0875}] },
+        VA: { type: 'brackets', deduction: 4500, brackets: [{upTo:3000,rate:0.02},{upTo:5000,rate:0.03},{upTo:17000,rate:0.05},{upTo:Infinity,rate:0.0575}] },
+        WA: { type: 'none' },
+        WV: { type: 'brackets', deduction: 0, brackets: [{upTo:10000,rate:0.0236},{upTo:25000,rate:0.0315},{upTo:40000,rate:0.0354},{upTo:60000,rate:0.0472},{upTo:Infinity,rate:0.0512}] },
+        WI: { type: 'brackets', deduction: 13230, brackets: [{upTo:14320,rate:0.035},{upTo:28640,rate:0.044},{upTo:315310,rate:0.053},{upTo:Infinity,rate:0.0765}] },
+        WY: { type: 'none' }
+    };
+
+    // === SHOP ITEMS (8 placeholder items) ===
+    // 4 cost hearts, 4 cost energy. Colors are placeholders for future art.
+    const ShopItems = [
+        { id: 'item_red',    color: '#E74C3C', currency: 'hearts', price: 10, label: 'TBA' },
+        { id: 'item_pink',   color: '#FF6FB5', currency: 'hearts', price: 15, label: 'TBA' },
+        { id: 'item_purple', color: '#9B59B6', currency: 'hearts', price: 25, label: 'TBA' },
+        { id: 'item_magenta',color: '#C2185B', currency: 'hearts', price: 40, label: 'TBA' },
+        { id: 'item_yellow', color: '#F39C12', currency: 'energy', price: 10, label: 'TBA' },
+        { id: 'item_orange', color: '#FF7043', currency: 'energy', price: 15, label: 'TBA' },
+        { id: 'item_green',  color: '#27AE60', currency: 'energy', price: 25, label: 'TBA' },
+        { id: 'item_blue',   color: '#2980B9', currency: 'energy', price: 40, label: 'TBA' }
+    ];
+
+    const AppLogic = {
+        state: { 
+            workerData: null, 
+            xpPerLevel: 50,
+            countdownInterval: null
+        },
+
+        init() {
+            // Safe storage wrapper — Edge blocks localStorage on file:// in some configs
+            const savedData = this.storageGet('worker_save_v12');
+            if (savedData) {
+                this.state.workerData = JSON.parse(savedData);
+                this.migratePayData();
+                this.calculateCurrentMaxXP();
+            } else {
+                const oldData = this.storageGet('worker_save_v11');
+                if (oldData) {
+                    this.state.workerData = JSON.parse(oldData);
+                    this.migratePayData();
+                    this.saveData();
+                    this.calculateCurrentMaxXP();
+                } else {
+                    this.setupOnboarding();
+                    return;
+                }
+            }
+            this.setupNavigation();
+            if (this.state.workerData) this.loadApp();
+        },
+
+        // Storage helpers — falls back to in-memory if localStorage is blocked (Edge file://)
+        _memStore: {},
+        storageGet(key) {
+            try { return localStorage.getItem(key); }
+            catch(e) { return this._memStore[key] || null; }
+        },
+        storageSet(key, val) {
+            try { localStorage.setItem(key, val); }
+            catch(e) { this._memStore[key] = val; }
+        },
+        storageClear() {
+            try { localStorage.clear(); }
+            catch(e) { this._memStore = {}; }
+        },
+
+        // Ensures all pay fields exist on saves that pre-date this feature
+        migratePayData() {
+            const d = this.state.workerData;
+            if (!d.payType) d.payType = 'hourly';
+            if (!d.hourlyRate) d.hourlyRate = 0;
+            if (!d.salaryAmount) d.salaryAmount = 0;
+            if (!d.payFrequency) d.payFrequency = 'weekly';
+            if (d.payDay === undefined || d.payDay === null) d.payDay = 2;
+            if (d.state === undefined) d.state = ''; // No state by default
+            if (!d.inventory) d.inventory = {}; // {itemId: count}
+        },
+
+        getTodayString() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        },
+
+        // BUG FIX: was comparing string to number (h >= 12), now uses parseInt
+        formatTime12(time24) {
+            if (!time24) return "--:--";
+            let [h, m] = time24.split(':');
+            h = parseInt(h, 10);
+            const suffix = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${m} ${suffix}`;
+        },
+
+        calculateCurrentMaxXP() {
+            let maxXP = 50;
+            for (let i = 1; i < this.state.workerData.level; i++) { maxXP = Math.floor(maxXP * 1.2); }
+            this.state.xpPerLevel = maxXP;
+        },
+
+        setupOnboarding() {
+            document.querySelectorAll('.char-select').forEach(btn => {
+                btn.addEventListener('click', (e) => this.createNewProfile(e.target.getAttribute('data-avatar')));
+            });
+        },
+
+        createNewProfile(avatarFile) {
+            this.state.workerData = {
+                avatarImage: avatarFile,
+                level: 1, xp: 0, energy: 0, hearts: 0,
+                activeTasks: [], jobType: null, customJobName: "", position: "", workTasks: [],
+                customShifts: {},
+                activeShift: null,
+                // Pay fields initialized on new profiles
+                payType: 'hourly',
+                hourlyRate: 0,
+                salaryAmount: 0,
+                payFrequency: 'weekly',
+                payDay: 2,  // Tuesday
+                state: '',  // No state until user selects one
+                inventory: {} // Shop items: { itemId: count }
+            };
+            this.saveData();
+            document.getElementById('onboarding-screen').classList.add('hidden');
+            this.setupNavigation();
+            this.loadApp();
+        },
+
+        saveData() { this.storageSet('worker_save_v12', JSON.stringify(this.state.workerData)); },
+
+        loadApp() {
+            document.getElementById('main-screen').classList.remove('hidden');
+            document.getElementById('onboarding-screen').classList.add('hidden');
+            
+            document.getElementById('home-avatar').style.backgroundImage = `url('${this.state.workerData.avatarImage}')`;
+            document.getElementById('work-avatar').style.backgroundImage = `url('${this.state.workerData.avatarImage}')`;
+            
+            this.updateHeaderUI();
+            this.updateXPUI();
+            this.renderHomeTasks();
+            this.renderTaskBank();
+            
+            if (this.state.workerData.activeShift) {
+                this.startCountdownLoop();
+            }
+        },
+
+        setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const targetView = item.getAttribute('data-target');
+                    if (targetView) this.switchView(targetView);
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    item.classList.add('active');
+                });
+            });
+        },
+
+        switchView(viewId) {
+            document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            if (viewId === 'home-view') this.renderHomeTasks();
+            if (viewId === 'work-view') this.checkWorkState();
+            if (viewId === 'shop-view') this.renderShop();
+            if (viewId === 'bag-view') this.renderBag();
+        },
+
+        toggleHomeSettings(show) {
+            const overlay = document.getElementById('home-settings-overlay');
+            if (show) overlay.classList.add('active');
+            else overlay.classList.remove('active');
+        },
+
+        confirmReset() {
+            if (confirm("Are you absolutely sure you want to reset all your progress? This will delete your avatar, jobs, and tasks.")) {
+                this.storageClear();
+                location.reload();
+            }
+        },
+
+        // BUG FIX: was using implicit global `event` — now receives the button element directly
+        switchSettingsTab(btnEl) {
+            document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
+            btnEl.classList.add('active');
+            document.getElementById(`pane-${btnEl.dataset.tab}`).classList.add('active');
+        },
+
+        populateSettingsMenu() {
+            const d = this.state.workerData;
+            document.getElementById('input-job-name').value = d.customJobName || '';
+            document.getElementById('input-position').value = d.position || '';
+            
+            // Restore pay settings
+            this.setPayType(d.payType || 'hourly', true);
+            document.getElementById('input-hourly-rate').value = d.hourlyRate || '';
+            document.getElementById('input-salary-amount').value = d.salaryAmount || '';
+            document.getElementById('input-pay-freq').value = d.payFrequency || 'weekly';
+            document.getElementById('input-pay-day').value = d.payDay !== undefined ? d.payDay : 2;
+            document.getElementById('input-state').value = d.state || '';
+            this.updatePayCyclePreview();
+
+            document.getElementById('input-shift-date').value = this.getTodayString();
+            this.renderSettingsWorkTasks();
+            this.renderCalendarList();
+        },
+
+        // =============================================
+        //  PAY SETTINGS
+        // =============================================
+
+        setPayType(type, silent = false) {
+            document.getElementById('btn-pay-hourly').classList.toggle('active', type === 'hourly');
+            document.getElementById('btn-pay-salary').classList.toggle('active', type === 'salary');
+            document.getElementById('hourly-fields').classList.toggle('hidden', type !== 'hourly');
+            document.getElementById('salary-fields').classList.toggle('hidden', type !== 'salary');
+            if (!silent) this.updatePayCyclePreview();
+        },
+
+        updatePayCyclePreview() {
+            const freq = document.getElementById('input-pay-freq').value;
+            const payDayNum = parseInt(document.getElementById('input-pay-day').value, 10);
+            const dayName = DayNames[payDayNum];
+            const preview = document.getElementById('pay-cycle-preview');
+
+            let freqText = '';
+            if (freq === 'weekly') freqText = `every <span>${dayName}</span>`;
+            else if (freq === 'biweekly') freqText = `every other <span>${dayName}</span>`;
+            else freqText = `on the <span>${dayName}</span> of each month (closest)`;
+
+            const cycleInfo = this.getPayCycleDates(freq, payDayNum);
+            preview.innerHTML = `
+                <p>📅 You get paid ${freqText}.</p>
+                <p style="margin-top:6px;">Current cycle: <span>${cycleInfo.startLabel} → ${cycleInfo.endLabel}</span></p>
+                <p style="margin-top:4px;">Next pay day: <span>${cycleInfo.nextPayLabel}</span></p>
+            `;
+        },
+
+        savePayData() {
+            const type = document.getElementById('btn-pay-hourly').classList.contains('active') ? 'hourly' : 'salary';
+            const d = this.state.workerData;
+            d.payType = type;
+            d.hourlyRate = parseFloat(document.getElementById('input-hourly-rate').value) || 0;
+            d.salaryAmount = parseFloat(document.getElementById('input-salary-amount').value) || 0;
+            d.payFrequency = document.getElementById('input-pay-freq').value;
+            d.payDay = parseInt(document.getElementById('input-pay-day').value, 10);
+            d.state = document.getElementById('input-state').value || '';
+            this.saveData();
+            this.checkWorkState(); // Refresh pay summary card on work screen
+            alert("Payroll settings saved!");
+        },
+
+        // =============================================
+        //  PAY CYCLE CALCULATION ENGINE
+        // =============================================
+
+        // Returns the start/end dates of the current pay cycle and the next pay day
+        getPayCycleDates(freq, payDayOfWeek) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let cycleStart, cycleEnd, nextPay;
+
+            if (freq === 'weekly') {
+                // Pay day = start of next cycle. Work cycle = prev payday through day before this payday.
+                // Find most recent past payday (inclusive today)
+                const daysSincePay = (today.getDay() - payDayOfWeek + 7) % 7;
+                cycleStart = new Date(today);
+                cycleStart.setDate(today.getDate() - daysSincePay);
+                cycleEnd = new Date(cycleStart);
+                cycleEnd.setDate(cycleStart.getDate() + 6);
+                nextPay = new Date(cycleStart);
+                nextPay.setDate(cycleStart.getDate() + 7);
+
+            } else if (freq === 'biweekly') {
+                // Use a fixed epoch (known Tuesday) and find which 2-week block we're in
+                const epoch = new Date(2025, 0, 7); // A known Tuesday — adjust if needed
+                epoch.setHours(0, 0, 0, 0);
+                // Find the number of days to shift epoch to payDayOfWeek
+                const epochShift = (payDayOfWeek - epoch.getDay() + 7) % 7;
+                const anchor = new Date(epoch);
+                anchor.setDate(epoch.getDate() + epochShift);
+
+                const msPerCycle = 14 * 24 * 60 * 60 * 1000;
+                const diff = today.getTime() - anchor.getTime();
+                const cycleIndex = Math.floor(diff / msPerCycle);
+                cycleStart = new Date(anchor.getTime() + cycleIndex * msPerCycle);
+                cycleEnd = new Date(cycleStart.getTime() + 13 * 24 * 60 * 60 * 1000);
+                nextPay = new Date(cycleStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+            } else { // monthly
+                cycleStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                cycleEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                // Pay day = next month's matching weekday (or same month if not yet passed)
+                nextPay = this.getNextWeekdayOfMonth(today.getFullYear(), today.getMonth() + 1, payDayOfWeek);
+            }
+
+            const fmt = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const fmtFull = (d) => d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            return {
+                start: cycleStart,
+                end: cycleEnd,
+                nextPay: nextPay,
+                startLabel: fmt(cycleStart),
+                endLabel: fmt(cycleEnd),
+                nextPayLabel: fmtFull(nextPay)
+            };
+        },
+
+        // For monthly: find the first occurrence of a given weekday in a given month
+        getNextWeekdayOfMonth(year, month, targetDay) {
+            const d = new Date(year, month, 1);
+            while (d.getDay() !== targetDay) { d.setDate(d.getDate() + 1); }
+            return d;
+        },
+
+        // Sums hours worked within the current pay cycle from customShifts
+        calculateCycleHoursAndPay() {
+            const d = this.state.workerData;
+            if (!d.payFrequency || (!d.hourlyRate && !d.salaryAmount)) {
+                return null;
+            }
+
+            const cycleInfo = this.getPayCycleDates(d.payFrequency, d.payDay);
+            let totalMinutes = 0;
+
+            Object.entries(d.customShifts).forEach(([dateStr, shift]) => {
+                const shiftDate = new Date(dateStr + 'T00:00:00');
+                shiftDate.setHours(0, 0, 0, 0);
+                if (shiftDate >= cycleInfo.start && shiftDate <= cycleInfo.end) {
+                    const [startH, startM] = shift.start.split(':').map(Number);
+                    const [endH, endM] = shift.end.split(':').map(Number);
+                    let mins = (endH * 60 + endM) - (startH * 60 + startM);
+                    if (mins < 0) mins += 24 * 60; // crosses midnight
+                    totalMinutes += mins;
+                }
+            });
+
+            const totalHours = totalMinutes / 60;
+            let grossPay = 0;
+
+            if (d.payType === 'hourly') {
+                grossPay = totalHours * (d.hourlyRate || 0);
+            } else {
+                // Salary: divide annual by number of pay periods
+                const periodsPerYear = d.payFrequency === 'weekly' ? 52 : d.payFrequency === 'biweekly' ? 26 : 12;
+                grossPay = (d.salaryAmount || 0) / periodsPerYear;
+            }
+
+            return {
+                hours: totalHours,
+                grossPay: grossPay,
+                cycleInfo: cycleInfo
+            };
+        },
+
+        // === TAX CALCULATIONS ===
+
+        // Apply progressive brackets to taxable income → annual tax
+        applyBrackets(taxable, brackets) {
+            if (taxable <= 0) return 0;
+            let tax = 0;
+            let prevCap = 0;
+            for (const b of brackets) {
+                if (taxable <= b.upTo) {
+                    tax += (taxable - prevCap) * b.rate;
+                    return tax;
+                }
+                tax += (b.upTo - prevCap) * b.rate;
+                prevCap = b.upTo;
+            }
+            return tax;
+        },
+
+        // Returns annual federal tax (single filer, standard deduction)
+        calcFederalAnnual(annualGross) {
+            const taxable = Math.max(0, annualGross - FED_STANDARD_DEDUCTION);
+            return this.applyBrackets(taxable, FED_BRACKETS);
+        },
+
+        // Returns annual state tax for given state code
+        calcStateAnnual(annualGross, stateCode) {
+            if (!stateCode || !STATE_TAX[stateCode]) return 0;
+            const cfg = STATE_TAX[stateCode];
+            if (cfg.type === 'none') return 0;
+            const deduction = cfg.deduction || 0;
+            const taxable = Math.max(0, annualGross - deduction);
+            if (cfg.type === 'flat') return taxable * cfg.rate;
+            if (cfg.type === 'brackets') return this.applyBrackets(taxable, cfg.brackets);
+            return 0;
+        },
+
+        // Returns per-paycheck federal & state tax for a given pay cycle
+        calcTaxesForCycle(grossPay) {
+            const d = this.state.workerData;
+            const periodsPerYear = d.payFrequency === 'weekly' ? 52
+                : d.payFrequency === 'biweekly' ? 26 : 12;
+            // Annualize this paycheck to estimate what bracket they're in
+            const annualGross = grossPay * periodsPerYear;
+            const annualFederal = this.calcFederalAnnual(annualGross);
+            const annualState = this.calcStateAnnual(annualGross, d.state);
+            return {
+                federal: annualFederal / periodsPerYear,
+                state: annualState / periodsPerYear,
+                stateCode: d.state || ''
+            };
+        },
+
+        renderPaySummaryCard() {
+            const d = this.state.workerData;
+            const card = document.getElementById('card-pay-summary');
+            if (!card) return;
+            
+            const hasPaySetup = d.payFrequency && (d.hourlyRate > 0 || d.salaryAmount > 0);
+
+            if (!hasPaySetup) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            const result = this.calculateCycleHoursAndPay();
+            if (!result) { card.classList.add('hidden'); return; }
+
+            card.classList.remove('hidden');
+
+            const hoursDisplay = result.hours % 1 === 0
+                ? `${result.hours} hrs`
+                : `${result.hours.toFixed(1)} hrs`;
+
+            document.getElementById('ui-pay-cycle-range').innerText =
+                `${result.cycleInfo.startLabel} – ${result.cycleInfo.endLabel}`;
+            document.getElementById('ui-pay-cycle-hours').innerText = hoursDisplay;
+            document.getElementById('ui-pay-cycle-earn').innerText =
+                `$${result.grossPay.toFixed(2)}`;
+            document.getElementById('ui-next-payday').innerText =
+                result.cycleInfo.nextPayLabel;
+
+            // Tax breakdown
+            const fedRow = document.getElementById('row-federal-tax');
+            const stateRow = document.getElementById('row-state-tax');
+            const stateLabel = document.getElementById('ui-state-label');
+            const netEl = document.getElementById('ui-net-pay');
+
+            if (result.grossPay > 0) {
+                const taxes = this.calcTaxesForCycle(result.grossPay);
+                const net = result.grossPay - taxes.federal - taxes.state;
+
+                fedRow.classList.remove('hidden');
+                document.getElementById('ui-federal-tax').innerText = `$${taxes.federal.toFixed(2)}`;
+
+                if (taxes.stateCode && STATE_TAX[taxes.stateCode]) {
+                    stateRow.classList.remove('hidden');
+                    stateLabel.innerText = taxes.stateCode;
+                    document.getElementById('ui-state-tax').innerText = 
+                        STATE_TAX[taxes.stateCode].type === 'none'
+                            ? '$0.00 (no state tax)'
+                            : `$${taxes.state.toFixed(2)}`;
+                } else {
+                    stateRow.classList.add('hidden');
+                }
+                netEl.innerText = `$${net.toFixed(2)}`;
+            } else {
+                fedRow.classList.add('hidden');
+                stateRow.classList.add('hidden');
+                netEl.innerText = `$${result.grossPay.toFixed(2)}`;
+            }
+        },
+
+        // =============================================
+        //  WORK & TIME CLOCK LOGIC
+        // =============================================
+        checkWorkState() {
+            const selectState = document.getElementById('job-selection-state');
+            const activeState = document.getElementById('active-work-state');
+            const btnClockIn = document.getElementById('btn-clock-in');
+            
+            if (!this.state.workerData.jobType) {
+                selectState.classList.remove('hidden');
+                activeState.classList.add('hidden');
+                this.renderJobMarket(); 
+            } else {
+                selectState.classList.add('hidden');
+                activeState.classList.remove('hidden');
+                
+                const cat = JobCategories.find(j => j.id === this.state.workerData.jobType);
+                document.getElementById('ui-job-title').innerText = this.state.workerData.customJobName || (cat ? cat.name : "Work");
+                document.getElementById('ui-job-position').innerText = this.state.workerData.position || "Employee";
+
+                const todayStr = this.getTodayString();
+                const d = new Date();
+                document.getElementById('ui-today-day').innerText = `Today is ${DayNames[d.getDay()]}, ${d.toLocaleDateString()}`;
+                
+                const shiftToday = this.state.workerData.customShifts[todayStr];
+                
+                if (this.state.workerData.activeShift) {
+                    document.getElementById('card-shift-idle').classList.add('hidden');
+                    document.getElementById('card-shift-active').classList.remove('hidden');
+                    const inDate = new Date(this.state.workerData.activeShift.inTime);
+                    document.getElementById('ui-punch-in-time').innerText = inDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                } else {
+                    document.getElementById('card-shift-idle').classList.remove('hidden');
+                    document.getElementById('card-shift-active').classList.add('hidden');
+                    
+                    if (shiftToday) {
+                        document.getElementById('ui-today-shift').innerText = `${this.formatTime12(shiftToday.start)} - ${this.formatTime12(shiftToday.end)}`;
+                        btnClockIn.innerText = "Clock In";
+                        btnClockIn.disabled = false;
+                    } else {
+                        document.getElementById('ui-today-shift').innerText = "Day Off";
+                        btnClockIn.innerText = "Not Scheduled Today";
+                        btnClockIn.disabled = true;
+                    }
+                }
+                this.renderWorkTasks();
+                this.renderPaySummaryCard();
+            }
+        },
+
+        renderJobMarket() {
+            const container = document.getElementById('job-grid-container');
+            container.innerHTML = '';
+            JobCategories.forEach(job => {
+                const el = document.createElement('div');
+                el.className = 'job-card';
+                el.innerHTML = `<div class="job-card-icon">${job.icon}</div><div class="job-card-title">${job.name}</div>`;
+                el.addEventListener('click', () => {
+                    this.state.workerData.jobType = job.id;
+                    this.saveData();
+                    this.checkWorkState();
+                });
+                container.appendChild(el);
+            });
+        },
+
+        clockIn() {
+            const todayStr = this.getTodayString();
+            const shiftToday = this.state.workerData.customShifts[todayStr];
+            if (!shiftToday) return; 
+
+            const now = new Date();
+            const [endH, endM] = shiftToday.end.split(':').map(Number);
+            let endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM, 0);
+            
+            if (endDate.getTime() < now.getTime()) {
+                endDate.setDate(endDate.getDate() + 1); 
+            }
+
+            this.state.workerData.activeShift = {
+                inTime: now.getTime(),
+                expectedEnd: endDate.getTime()
+            };
+            this.saveData();
+            this.checkWorkState();
+            this.startCountdownLoop();
+        },
+
+        startCountdownLoop() {
+            if (this.state.countdownInterval) clearInterval(this.state.countdownInterval);
+            
+            const updateUI = () => {
+                if (!this.state.workerData.activeShift) return;
+                const diff = this.state.workerData.activeShift.expectedEnd - Date.now();
+                const display = document.getElementById('ui-shift-countdown');
+
+                if (diff <= 0) {
+                    display.innerText = "SHIFT COMPLETE";
+                    display.style.color = "#4CAF50";
+                    return;
+                }
+
+                display.style.color = "#2c3e50";
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                display.innerText = 
+                    String(hours).padStart(2, '0') + ":" + 
+                    String(minutes).padStart(2, '0') + ":" + 
+                    String(seconds).padStart(2, '0');
+            };
+
+            updateUI(); 
+            this.state.countdownInterval = setInterval(updateUI, 1000);
+        },
+
+        clockOut() {
+            if (this.state.countdownInterval) clearInterval(this.state.countdownInterval);
+            this.state.workerData.activeShift = null;
+            this.saveData();
+            this.gainXP(150);
+            this.state.workerData.energy += 50;
+            this.updateHeaderUI();
+            this.checkWorkState(); 
+        },
+
+        toggleWorkSettings(show) {
+            const overlay = document.getElementById('work-settings-overlay');
+            if (show) {
+                this.populateSettingsMenu();
+                overlay.classList.add('active');
+            } else {
+                overlay.classList.remove('active');
+            }
+        },
+
+        addSpecificShift() {
+            const dateVal = document.getElementById('input-shift-date').value;
+            const startVal = document.getElementById('input-shift-start').value;
+            const endVal = document.getElementById('input-shift-end').value;
+
+            if (!dateVal || !startVal || !endVal) {
+                alert("Please fill out date, start, and end time.");
+                return;
+            }
+
+            this.state.workerData.customShifts[dateVal] = { start: startVal, end: endVal };
+            this.saveData();
+            this.renderCalendarList();
+            this.checkWorkState(); 
+        },
+
+        deleteShift(dateStr) {
+            delete this.state.workerData.customShifts[dateStr];
+            this.saveData();
+            this.renderCalendarList();
+            this.checkWorkState();
+        },
+
+        renderCalendarList() {
+            const container = document.getElementById('shift-list-container');
+            container.innerHTML = '';
+            
+            const dates = Object.keys(this.state.workerData.customShifts).sort();
+            
+            if (dates.length === 0) {
+                container.innerHTML = `<p style="color:#7f8c8d; text-align:center; margin-top:20px;">Your calendar is empty.</p>`;
+                return;
+            }
+
+            dates.forEach(dateStr => {
+                const shift = this.state.workerData.customShifts[dateStr];
+                const d = new Date(dateStr + "T00:00:00"); 
+                const niceDate = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                
+                container.innerHTML += `
+                  <div class="scheduled-shift-item">
+                    <div>
+                        <div style="font-weight:bold; color:#2c3e50;">${niceDate}</div>
+                        <div style="font-size:0.85rem; color:#7f8c8d;">${this.formatTime12(shift.start)} to ${this.formatTime12(shift.end)}</div>
+                    </div>
+                    <button style="color:#e74c3c; background:none; border:none; cursor:pointer; font-weight:bold;" onclick="AppLogic.deleteShift('${dateStr}')">Cancel</button>
+                  </div>
+                `;
+            });
+        },
+
+        saveWorkProfile() {
+            this.state.workerData.customJobName = document.getElementById('input-job-name').value.trim();
+            this.state.workerData.position = document.getElementById('input-position').value.trim();
+            this.saveData();
+            this.checkWorkState(); 
+            alert("Profile Saved!");
+        },
+
+        addWorkTask() {
+            const input = document.getElementById('input-work-task');
+            if (!input.value.trim()) return;
+            this.state.workerData.workTasks.push({ id: 'wtask_' + Date.now(), text: input.value.trim(), completed: false });
+            input.value = '';
+            this.saveData();
+            this.renderSettingsWorkTasks();
+            this.renderWorkTasks();
+        },
+
+        renderSettingsWorkTasks() {
+            const container = document.getElementById('settings-work-tasks-list');
+            container.innerHTML = '';
+            this.state.workerData.workTasks.forEach((task, index) => {
+                const div = document.createElement('div');
+                div.style.cssText = 'background:white; padding:10px; border-radius:8px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border:1px solid #eee;';
+                div.innerHTML = `<span>${task.text}</span><button style="color:red; background:none; border:none; cursor:pointer;">Delete</button>`;
+                div.querySelector('button').addEventListener('click', () => this.deleteWorkTask(index));
+                container.appendChild(div);
+            });
+        },
+
+        deleteWorkTask(index) {
+            this.state.workerData.workTasks.splice(index, 1);
+            this.saveData();
+            this.renderSettingsWorkTasks();
+            this.renderWorkTasks();
+        },
+
+        renderWorkTasks() {
+            const container = document.getElementById('work-task-list-container');
+            container.innerHTML = ''; 
+            const pending = this.state.workerData.workTasks.filter(t => !t.completed);
+
+            if (pending.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:white; opacity:0.8;">No tasks configured. Add some in settings!</div>`;
+                return;
+            }
+
+            pending.forEach(task => {
+                const taskEl = document.createElement('div');
+                taskEl.className = 'task-item';
+                taskEl.innerHTML = `<div class="task-info"><div class="task-title">${task.text}</div><div class="task-reward" style="color:#FFC107; font-weight:bold;">+15 XP &nbsp;⚡ +8</div></div><button class="task-check">✔</button>`;
+                taskEl.querySelector('.task-check').addEventListener('click', () => {
+                    taskEl.classList.add('completed');
+                    this.state.workerData.energy += 8;
+                    this.gainXP(15);
+                    this.updateHeaderUI();
+                    setTimeout(() => {
+                        taskEl.classList.add('hiding');
+                        setTimeout(() => { task.completed = true; this.saveData(); this.renderWorkTasks(); }, 400); 
+                    }, 400); 
+                });
+                container.appendChild(taskEl);
+            });
+        },
+
+        renderTaskBank() {
+            const container = document.getElementById('task-bank-container');
+            container.innerHTML = ''; 
+            TaskBank.forEach(task => {
+                container.innerHTML += `
+                  <div class="bank-item">
+                    <div class="bank-left">
+                      <div class="task-icon" style="width:40px; height:40px; font-size:1.2rem;">${task.icon}</div>
+                      <div><div style="font-weight:bold; color:#333;">${task.text}</div><div style="font-size:0.8rem; color:#777;">+${task.reward} XP</div></div>
+                    </div>
+                    <div class="bank-actions">
+                      <button class="add-btn" onclick="AppLogic.addTaskToHome('${task.templateId}', 'daily')">D</button>
+                      <button class="add-btn" onclick="AppLogic.addTaskToHome('${task.templateId}', 'weekly')">W</button>
+                      <button class="add-btn" onclick="AppLogic.addTaskToHome('${task.templateId}', 'monthly')">M</button>
+                    </div>
+                  </div>`;
+            });
+        },
+
+        addTaskToHome(templateId, frequency) {
+            const tmpl = TaskBank.find(t => t.templateId === templateId);
+            if (!tmpl) return;
+            this.state.workerData.activeTasks.push({ id: 'task_' + Date.now(), text: tmpl.text, icon: tmpl.icon, reward: tmpl.reward, frequency: frequency, completed: false });
+            this.saveData();
+            alert(`${tmpl.text} added!`);
+        },
+
+        renderHomeTasks() {
+            const container = document.getElementById('task-list-container');
+            container.innerHTML = ''; 
+            const pending = this.state.workerData.activeTasks.filter(t => !t.completed);
+            
+            document.getElementById('ui-task-count').innerText = pending.length === 0 ? "📅 All caught up!" : `📅 ${pending.length} goals left!`;
+            
+            pending.forEach(task => {
+                const taskEl = document.createElement('div');
+                taskEl.className = 'task-item';
+                taskEl.innerHTML = `<div class="task-icon">${task.icon}</div><div class="task-info"><div class="task-title">${task.text}</div><div class="task-reward"><span class="freq-badge">${task.frequency}</span>❤️ +${Math.floor(task.reward/2)} &nbsp;⭐ +${task.reward}</div></div><button class="task-check">✔</button>`;
+                taskEl.querySelector('.task-check').addEventListener('click', () => {
+                    taskEl.classList.add('completed');
+                    this.state.workerData.hearts += Math.floor(task.reward / 2);
+                    this.gainXP(task.reward);
+                    this.updateHeaderUI();
+                    setTimeout(() => { taskEl.classList.add('hiding'); setTimeout(() => { task.completed = true; this.saveData(); this.renderHomeTasks(); }, 400); }, 400); 
+                });
+                container.appendChild(taskEl);
+            });
+        },
+
+        gainXP(amount) {
+            this.state.workerData.xp += amount;
+            if (this.state.workerData.xp >= this.state.xpPerLevel) {
+                this.state.workerData.level += 1;
+                this.state.workerData.xp -= this.state.xpPerLevel;
+                this.state.xpPerLevel = Math.floor(this.state.xpPerLevel * 1.2); 
+                document.getElementById('modal-level-text').innerText = this.state.workerData.level;
+                document.getElementById('level-up-modal').classList.remove('hidden');
+            }
+            this.updateXPUI();
+        },
+
+        updateHeaderUI() {
+            document.getElementById('ui-energy').innerText = this.state.workerData.energy;
+            document.getElementById('ui-hearts').innerText = this.state.workerData.hearts;
+            document.getElementById('ui-energy-work').innerText = this.state.workerData.energy;
+            document.getElementById('ui-hearts-work').innerText = this.state.workerData.hearts;
+        },
+
+        updateXPUI() {
+            document.getElementById('ui-level').innerText = this.state.workerData.level;
+            document.getElementById('ui-xp-text').innerText = `${this.state.workerData.xp} / ${this.state.xpPerLevel}`;
+            document.getElementById('ui-xp-fill').style.width = `${(this.state.workerData.xp / this.state.xpPerLevel) * 100}%`;
+        },
+
+        // =============================================
+        //  SHOP & INVENTORY
+        // =============================================
+        renderShop() {
+            const container = document.getElementById('vending-grid-container');
+            if (!container) return;
+            container.innerHTML = '';
+            const d = this.state.workerData;
+
+            ShopItems.forEach(item => {
+                const balance = item.currency === 'hearts' ? d.hearts : d.energy;
+                const canAfford = balance >= item.price;
+                const currencyIcon = item.currency === 'hearts' ? '❤️' : '⚡';
+
+                const slot = document.createElement('div');
+                slot.className = 'vending-slot';
+                slot.innerHTML = `
+                    <div class="vending-item" style="background:${item.color};">${item.label}</div>
+                    <button class="vending-buy-btn ${item.currency}" ${canAfford ? '' : 'disabled'}>
+                        ${currencyIcon} ${item.price}
+                    </button>
+                `;
+                slot.querySelector('.vending-buy-btn').addEventListener('click', () => {
+                    this.buyItem(item.id);
+                });
+                container.appendChild(slot);
+            });
+        },
+
+        buyItem(itemId) {
+            const item = ShopItems.find(i => i.id === itemId);
+            if (!item) return;
+            const d = this.state.workerData;
+            const balance = item.currency === 'hearts' ? d.hearts : d.energy;
+            if (balance < item.price) {
+                alert(`Not enough ${item.currency}!`);
+                return;
+            }
+            // Deduct currency
+            if (item.currency === 'hearts') d.hearts -= item.price;
+            else d.energy -= item.price;
+            // Add to inventory
+            if (!d.inventory) d.inventory = {};
+            d.inventory[itemId] = (d.inventory[itemId] || 0) + 1;
+
+            this.saveData();
+            this.updateHeaderUI();
+            this.renderShop(); // Re-render so disabled state updates
+        },
+
+        renderBag() {
+            const container = document.getElementById('bag-grid-container');
+            const emptyMsg = document.getElementById('bag-empty-message');
+            if (!container) return;
+            container.innerHTML = '';
+            const inv = this.state.workerData.inventory || {};
+            const ownedIds = Object.keys(inv).filter(id => inv[id] > 0);
+
+            if (ownedIds.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            ownedIds.forEach(id => {
+                const item = ShopItems.find(i => i.id === id);
+                if (!item) return;
+                const count = inv[id];
+                const slot = document.createElement('div');
+                slot.className = 'bag-slot';
+                slot.innerHTML = `
+                    ${count > 1 ? `<div class="bag-slot-count">×${count}</div>` : ''}
+                    <div class="vending-item" style="background:${item.color};">${item.label}</div>
+                    <div class="bag-slot-label">${item.label}</div>
+                `;
+                container.appendChild(slot);
+            });
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => AppLogic.init());
+  </script>
+
+</body>
+</html>
